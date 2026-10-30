@@ -55,6 +55,10 @@ function normalizeMemorySettings(settings) {
         settings.memoryMode = MEMORY_MODES.PREFIX_CACHE;
         changed = true;
     }
+    if (!isSettingValue(['scene', 'real', 'off'], settings.timeTrackingMode)) {
+        settings.timeTrackingMode = defaultSettings.timeTrackingMode;
+        changed = true;
+    }
     const validModes = [MEMORY_MODES.BALANCED, MEMORY_MODES.PREFIX_CACHE];
     if (!isSettingValue(validModes, settings.memoryMode)) {
         settings.memoryMode = defaultSettings.memoryMode;

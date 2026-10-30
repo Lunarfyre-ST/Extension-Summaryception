@@ -1,3 +1,9 @@
+import { PROSE_DATE_FORMAT_RULE } from '../foundation/prompt-constants.js';
+import {
+    EXECUTION_TRIGGER_L0,
+    EXECUTION_TRIGGER_PROMO,
+    insertBeforeTrigger,
+} from '../foundation/prompt-parts.js';
 import { getName1 } from '../foundation/context.js';
 import { isTraceEnabled, trace } from '../foundation/logger.js';
 import { getEffectiveSettings } from '../foundation/settings.js';
@@ -120,9 +126,53 @@ function hasSourceTokenMetadata(metadata = {}) {
  */
 function buildSummarizerPrompt({ template, storyTxt, contextStr, settings, profile }) {
     // replaceAll on purpose: every placeholder occurrence is replaced; user templates may repeat one.
-    const prompt = template
+    const prompt = adaptTimeInstructions(template, settings, profile)
         .replaceAll('{{player_name}}', getName1())
         .replaceAll('{{context_str}}', contextStr || '(none yet)')
         .replaceAll('{{story_txt}}', storyTxt);
-    return appendLayer0PromptConstraints(prompt, settings, profile);
+    const constrained = appendLayer0PromptConstraints(prompt, settings, profile);
+    if (
+        !profile?.policy?.compression ||
+        !settings.timeTrackingMode ||
+        settings.timeTrackingMode === 'scene'
+    )
+        return constrained;
+    return constrained
+        .replace('current_date_time must be the scene time at the end of that message.\n', '')
+        .replace(EXECUTION_TRIGGER_L0, EXECUTION_TRIGGER_PROMO);
+}
+
+/** Adapt the built-in temporal rules without changing saved prompt profiles. */
+function adaptTimeInstructions(template, settings, profile) {
+    if (
+        !profile?.policy?.compression ||
+        !settings.timeTrackingMode ||
+        settings.timeTrackingMode === 'scene'
+    )
+        return template;
+    let text = template
+        .replaceAll(PROSE_DATE_FORMAT_RULE, '')
+        .replace(
+            'Output exactly one <narrative> envelope, followed by a current_date_time line:',
+            'Output exactly one <narrative> envelope:',
+        )
+        .replace(/^Resolve any relative time reference in the passage.*$/gm, '')
+        .replace(/^current_date_time: YYYY-MM-DD HH ddd\nUse 24-hour.*$/gm, '')
+        .replace(/^End with the current_date_time line described in the output schema\.$/gm, '')
+        .replace(/^Always include current_date_time.*$/gm, '')
+        .replace(
+            'Do not include prose, bullets, tables, duplicate section headers, markdown, or commentary after the current_date_time line.',
+            'Do not include prose, bullets, tables, duplicate section headers, markdown, or commentary after the envelope.',
+        )
+        .replace(/^4\. \*\*Temporal Anchors:\*\*.*$/gm, '')
+        .replace(/^Resolve every relative time word against the source snippets.*$/gm, '');
+    const instruction =
+        settings.timeTrackingMode === 'real'
+            ? 'Chat-time anchors describe when messages were sent in the real world (UTC), not the time in the story. Never use them to infer scene dates. Do not output a current_date_time line.'
+            : 'Do not track or infer scene dates or times and do not output a current_date_time line. Preserve story-relevant sequence and deadlines only when stated.';
+    const trigger = profile?.policy?.promotionConstraints
+        ? EXECUTION_TRIGGER_PROMO
+        : EXECUTION_TRIGGER_L0;
+    text = insertBeforeTrigger(text, instruction, trigger);
+    return text;
 }

@@ -262,7 +262,7 @@ const HELP_ENTRIES = [
         'verbatim_token_budget',
         sliderHelp({
             selector: selectorFor('sc_verbatim_token_budget'),
-            title: 'Recent Chat Budget',
+            title: 'Live Chat Budget',
             short: 'Recent raw chat kept live.',
             controls: [
                 controlFor('sc_verbatim_token_budget'),
@@ -286,7 +286,7 @@ const HELP_ENTRIES = [
                 controlFor('sc_queued_token_budget_val'),
             ],
             meaning:
-                'Sets the queued older raw-chat range. Automatic summarization waits until Recent + Queued is full.',
+                'Sets the queued older raw-chat range. Automatic summarization waits until Live + Queued is full.',
             higher: 'lets more raw chat accumulate before a flush.',
             lower: 'flushes queued chat sooner after the recent window is full.',
             defaultText: '6k in Balanced; mode presets may change it.',
@@ -296,7 +296,7 @@ const HELP_ENTRIES = [
         'memory_token_budget',
         sliderHelp({
             selector: selectorFor('sc_memory_token_budget'),
-            title: 'Injected Memory Budget',
+            title: 'Memory Budget',
             short: 'Maximum memory block size that goes to the model.',
             controls: [
                 controlFor('sc_memory_token_budget'),
@@ -369,7 +369,7 @@ const HELP_ENTRIES = [
                 controlFor('sc_min_summary_budget_val'),
             ],
             meaning:
-                'Sets the preferred size of each balanced Layer 0 partition. Recent + Queued fullness controls automatic summarization.',
+                'Sets the preferred size of each balanced Layer 0 partition. Live + Queued fullness controls automatic summarization.',
             higher: 'makes fewer, larger summarizer calls up to the source cap.',
             lower: 'creates smaller partitions and more summarizer calls.',
             defaultText: '16k; auto-derived from Model context.',

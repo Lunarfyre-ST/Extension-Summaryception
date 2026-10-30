@@ -1,4 +1,6 @@
 import { getChat } from '../foundation/context.js';
+import { getEffectiveSettings } from '../foundation/settings.js';
+import { getMessageTimestampMs } from './cache-staleness.js';
 import { resolveScIdsToIndices } from '../foundation/message-identity.js';
 import { LEADING_NARRATIVE_HEADER_RE, parseNarrativeEnvelope } from './structural-headers.js';
 import { collectSnippetSourceIds } from './snippet-provenance.js';
@@ -182,7 +184,7 @@ export function formatAnchoredSnippetNarrative(snippet = {}, formatAnchor = form
  * @param {object} snippet
  * @returns {string}
  */
-export function formatSnippetAnchor(snippet = {}) {
+export function formatSnippetAnchor(snippet = {}, mode = getEffectiveSettings().timeTrackingMode) {
     const meta = extractSnippetMetadata(snippet);
     const range = resolveSnippetRange(meta.sourceMessageIds);
     if (!range) {
@@ -190,8 +192,9 @@ export function formatSnippetAnchor(snippet = {}) {
     }
 
     const rangeText = `msgs ${range[0]}-${range[1]}`;
-    const current = meta.currentDateTime || UNKNOWN_TIME;
-    return `[${rangeText}; current ${current}]`;
+    const current = trackedTime(meta, mode);
+    if (mode === 'off') return `[${rangeText}]`;
+    return `[${rangeText}; ${mode === 'real' ? 'chat time UTC' : 'current'} ${current || UNKNOWN_TIME}]`;
 }
 
 /**
@@ -199,7 +202,10 @@ export function formatSnippetAnchor(snippet = {}) {
  * @param {object} snippet
  * @returns {string}
  */
-export function formatCompactSnippetAnchor(snippet = {}) {
+export function formatCompactSnippetAnchor(
+    snippet = {},
+    mode = getEffectiveSettings().timeTrackingMode,
+) {
     const meta = extractSnippetMetadata(snippet);
     const range = resolveSnippetRange(meta.sourceMessageIds);
     if (!range) {
@@ -207,8 +213,24 @@ export function formatCompactSnippetAnchor(snippet = {}) {
     }
 
     const rangeText = `${range[0]}-${range[1]}`;
-    const current = formatCompactCurrentDateTime(meta.currentDateTime);
+    const current = formatCompactCurrentDateTime(trackedTime(meta, mode));
     return current ? `[${rangeText}@${current}]` : `[${rangeText}]`;
+}
+
+/** Resolve real-world time from the latest source message with a readable timestamp. */
+function trackedTime(meta, mode) {
+    if (mode === 'off') return undefined;
+    if (mode !== 'real') return meta.currentDateTime;
+    const chat = getChat();
+    const indices = resolveScIdsToIndices(chat, meta.sourceMessageIds);
+    for (const index of [...indices].reverse()) {
+        const ms = getMessageTimestampMs(chat[index]);
+        if (ms !== null && Number.isFinite(new Date(ms).getTime())) {
+            const date = new Date(ms);
+            return `${date.toISOString().slice(0, 10)} ${String(date.getUTCHours()).padStart(2, '0')} ${WEEKDAY_NAMES[date.getUTCDay()]}`;
+        }
+    }
+    return undefined;
 }
 
 /**

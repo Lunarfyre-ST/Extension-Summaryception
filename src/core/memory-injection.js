@@ -56,6 +56,7 @@ export function buildMemoryBody(layers) {
 export function buildInjection(layers, settings = getEffectiveSettings()) {
     const { chronologyParts, memoryText } = buildMemoryInjectionParts(layers, {
         compactAnchors: true,
+        timeTrackingMode: settings.timeTrackingMode,
     });
 
     return {
@@ -91,15 +92,18 @@ export async function measureInjection(injection) {
 
 /**
  * @param {Array<Array<{ text: string }>>} layers
- * @param {{ compactAnchors?: boolean }} [options]
+ * @param {{ compactAnchors?: boolean, timeTrackingMode?: string }} [options]
  * @returns {MemoryInjectionParts}
  */
-export function buildMemoryInjectionParts(layers, { compactAnchors = false } = {}) {
+export function buildMemoryInjectionParts(
+    layers,
+    { compactAnchors = false, timeTrackingMode } = {},
+) {
     if (!Array.isArray(layers)) {
         return emptyParts();
     }
 
-    const chronologyParts = collectChronologyParts(layers, compactAnchors);
+    const chronologyParts = collectChronologyParts(layers, compactAnchors, timeTrackingMode);
     const chronologyText = chronologyParts.map((part) => part.text).join('\n');
     const memoryText = chronologyText ? `[CHRONOLOGY]\n${chronologyText}` : '';
 
@@ -110,18 +114,27 @@ export function buildMemoryInjectionParts(layers, { compactAnchors = false } = {
  * The replacer is a function so `$` sequences in memory text are never
  * treated as replacement patterns.
  * @param {{ memoryText?: string }} injectionParts - Injection parts carrying the memory body.
- * @param {{ injectionTemplate?: string }} [settings] - Settings carrying the wrapper template.
+ * @param {{ injectionTemplate?: string, timeTrackingMode?: string }} [settings] - Settings carrying the wrapper template.
  * @param {{ emptyFallback?: string }} [options] - Text used when the memory body is empty.
  * @returns {string}
  */
 export function renderInjectionTemplate(injectionParts, settings, { emptyFallback = '' } = {}) {
-    return String(settings?.injectionTemplate || '{{summary}}').replaceAll(
+    let template = String(settings?.injectionTemplate || '{{summary}}');
+    if (settings?.timeTrackingMode && settings.timeTrackingMode !== 'scene') {
+        template = template.replace(
+            /^\[CHRONOLOGY\] = past events, oldest to newest\..*$/gm,
+            settings.timeTrackingMode === 'real'
+                ? '[CHRONOLOGY] = past events, oldest to newest. Timestamp anchors are real-world chat times in UTC, not story dates.'
+                : '[CHRONOLOGY] = past events, oldest to newest.',
+        );
+    }
+    return template.replaceAll(
         '{{summary}}',
         () => injectionParts.memoryText || emptyFallback || '',
     );
 }
 
-function collectChronologyParts(layers, compactAnchors) {
+function collectChronologyParts(layers, compactAnchors, timeTrackingMode) {
     const parts = [];
     for (let i = layers.length - 1; i >= 0; i--) {
         const layer = layers[i];
@@ -130,9 +143,10 @@ function collectChronologyParts(layers, compactAnchors) {
         }
         const text = layer
             .map((snippet) =>
-                formatAnchoredSnippetNarrative(
-                    snippet,
-                    compactAnchors ? formatCompactSnippetAnchor : formatSnippetAnchor,
+                formatAnchoredSnippetNarrative(snippet, (item) =>
+                    compactAnchors
+                        ? formatCompactSnippetAnchor(item, timeTrackingMode)
+                        : formatSnippetAnchor(item, timeTrackingMode),
                 ),
             )
             .filter(Boolean)

@@ -210,7 +210,7 @@ async function renderVerbatimBudget(s, work) {
         return {
             budget: s.verbatimTokenBudget,
             verbatim: {
-                label: 'Recent Chat',
+                label: 'Live Chat',
                 kind: 'verbatim',
                 count: work.verbatimTokens,
                 estimated: work.verbatimEstimated,

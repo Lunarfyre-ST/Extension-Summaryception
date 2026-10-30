@@ -244,6 +244,7 @@ export const defaultSettings = Object.freeze({
     verbatimTokenBudget: 22000,
     queuedTokenBudget: 6000,
     memoryTokenBudget: 10000,
+    timeTrackingMode: 'scene',
     snippetsPerLayer: 24,
     snippetsPerPromotion: 3,
     injectionTemplate: DEFAULT_INJECTION_TEMPLATE,

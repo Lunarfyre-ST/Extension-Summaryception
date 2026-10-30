@@ -19,4 +19,17 @@ describe('buildSummarizerPipelineInput', () => {
         expect(request.prompt).toContain('USER TURN');
         expect(request.repairPrompt).toBe('');
     });
+    it.each(['real', 'off'])('does not ask for scene time in %s mode', async (mode) => {
+        installSummaryContext();
+        const request = await buildSummarizerPipelineInput({
+            storyTxt: 'Story',
+            contextStr: '',
+            metadata: { kind: 'layer0', sourceRange: [0, 2] },
+            settings: { ...defaultSettings, timeTrackingMode: mode },
+        });
+        expect(request.prompt).not.toContain('current_date_time: YYYY-MM-DD');
+        expect(request.prompt).not.toContain('scene time at the end');
+        expect(request.prompt.toLowerCase()).toContain('do not output a current_date_time line');
+        expect(request.prompt.trimEnd()).toMatch(/Now output exactly one <narrative> envelope/);
+    });
 });

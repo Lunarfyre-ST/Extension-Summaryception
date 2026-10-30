@@ -1,5 +1,6 @@
 import { BATCH_PROGRESS } from '../foundation/constants.js';
 import { getContext, getChat } from '../foundation/context.js';
+import { getEffectiveSettings } from '../foundation/settings.js';
 import { ensureChatScIds } from '../foundation/message-identity.js';
 import { getChatStore } from '../foundation/chat-store.js';
 import { getCurrentSummarizedBoundary } from './snippet-provenance.js';
@@ -452,10 +453,14 @@ async function commitLayer0Snippets({ entries, notify, gate }) {
 }
 
 function buildLayer0Snippet(snapshot, summary) {
+    const sceneTracking = getEffectiveSettings().timeTrackingMode === 'scene';
+    const text = sceneTracking
+        ? summary
+        : summary.replace(/\s*current_date_time\s*[:=][^\r\n]*\s*$/i, '');
     return {
-        text: summary,
+        text,
         sourceMessageIds: [...snapshot.sourceMessageIds],
-        ...buildSnippetMetadataFromText(summary),
+        ...(sceneTracking ? buildSnippetMetadataFromText(text) : {}),
         timestamp: Date.now(),
     };
 }

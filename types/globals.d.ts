@@ -98,6 +98,7 @@ interface ExtensionSettings {
     configMode: string;
     uiMode: string;
     memoryMode: string;
+    timeTrackingMode: string;
     cacheTtlMinutes: number;
     customMemoryPosition: string;
     customMemoryRole: string;

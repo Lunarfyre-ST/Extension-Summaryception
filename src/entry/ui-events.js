@@ -108,6 +108,10 @@ function bindToggleHandlers(queue) {
         '#sc_continuity_enabled',
     ].join(', ');
     bindDataSettingElements(plainToggles, { eventName: 'change' });
+    bindDataSettingElements('#sc_easy_time_tracking, #sc_time_tracking', {
+        eventName: 'change',
+        afterSave: refreshFull,
+    });
 
     bindDocumentSetting({
         eventName: 'change',

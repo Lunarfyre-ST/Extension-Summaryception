@@ -60,6 +60,23 @@ describe('live metadata anchors', () => {
         expect(formatCompactSnippetAnchor(snippet)).toBe('[2-7@2024-01-02T14]');
     });
 
+    it('uses source message timestamps for real chat time and omits tracked time when off', () => {
+        const chat = makeMessages(3);
+        chat[0].send_date = '2024-02-01T22:30:00Z';
+        chat[1].send_date = '2024-02-02T03:45:00Z';
+        installSummaryContext({ chat });
+        const snippet = {
+            sourceMessageIds: ['message-0', 'message-1', 'message-2'],
+            currentDateTime: '1999-01-01 01',
+        };
+        expect(formatCompactSnippetAnchor(snippet, 'real')).toBe('[0-2@2024-02-02T03]');
+        expect(formatSnippetAnchor(snippet, 'off')).toBe('[msgs 0-2]');
+        expect(formatCompactSnippetAnchor(snippet, 'scene')).toBe('[0-2@1999-01-01T01]');
+        expect(formatCompactSnippetAnchor({ sourceMessageIds: ['message-2'] }, 'real')).toBe(
+            '[2-2]',
+        );
+    });
+
     it('omits anchors when no source ID resolves', () => {
         installSummaryContext({ chat: makeMessages(1) });
         expect(formatSnippetAnchor({ sourceMessageIds: ['missing'] })).toBe('');

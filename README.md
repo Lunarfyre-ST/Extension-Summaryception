@@ -209,6 +209,10 @@ Extension refuses to update: remove and install it again.
 
 Major updates can reset settings or misbehave: clear memories before updating and stick to the named branches.
 
+### Date and time tracking
+
+Choose **Scene time** to track dates stated in the story (the default), **Real-world chat time** to anchor memories to the last readable source-message timestamp in UTC, or **Off** to omit tracked time anchors. Missing real-world timestamps are left unanchored. Changing modes does not rewrite existing summaries; dates already written into their prose remain. Custom prompts and injection templates may contain their own time instructions and should be adjusted to match the chosen mode.
+
 ### Timestamps in bot replies
 
 Make sure each bot message contain timestamps! Exact format is not important. Some gaps are allowed, as long as it repeated once every 4-5 bot messages. Example prompt:

@@ -127,7 +127,7 @@
                             </div>
                             <div class="sc-row">
                                 <label for="sc_easy_memory_token_budget">
-                                    <span>Injected Memory</span>
+                                    <span>Memory Budget</span>
                                     <small class="sc-hint">The most Summaryception memory added to your main chat prompt.</small>
                                 </label>
                                 <div class="sc-slider-row">
@@ -136,11 +136,15 @@
                                 </div>
                             </div>
                             <div class="sc-row">
-                                <label for="sc_easy_verbatim_token_budget"><span>Recent Chat</span><small class="sc-hint">Recent raw chat kept live. The main request grows from Recent to Recent + Queued before Queued is summarized.</small></label>
+                                <label for="sc_easy_time_tracking"><span>Date and time tracking</span><small class="sc-hint">Scene time follows the story; real-world time uses saved chat message timestamps in UTC. Off removes tracked time anchors from memory.</small></label>
+                                <select id="sc_easy_time_tracking" class="text_pole" data-sc-setting="timeTrackingMode"><option value="scene">Scene time</option><option value="real">Real-world chat time (UTC)</option><option value="off">Off</option></select>
+                            </div>
+                            <div class="sc-row">
+                                <label for="sc_easy_verbatim_token_budget"><span>Live Chat</span><small class="sc-hint">Recent raw chat kept live. The main request grows from Live to Live + Queued before Queued is summarized.</small></label>
                                 <div class="sc-slider-row"><input type="range" id="sc_easy_verbatim_token_budget" min="4000" max="64000" step="1000" data-sc-slider-setting="verbatimTokenBudget" data-sc-partner-input="#sc_easy_verbatim_token_budget_val" /><input id="sc_easy_verbatim_token_budget_val" class="text_pole sc-val sc-val-wide" type="text" inputmode="numeric" data-sc-slider-setting="verbatimTokenBudget" data-sc-partner-input="#sc_easy_verbatim_token_budget" /></div>
                             </div>
                             <div class="sc-row">
-                                <label for="sc_easy_queued_token_budget"><span>Queued Chat</span><small class="sc-hint">Older raw chat queued for summarization after Recent + Queued is full.</small></label>
+                                <label for="sc_easy_queued_token_budget"><span>Queued Chat</span><small class="sc-hint">Older raw chat queued for summarization after Live + Queued is full.</small></label>
                                 <div class="sc-slider-row"><input type="range" id="sc_easy_queued_token_budget" min="4000" max="64000" step="1000" data-sc-slider-setting="queuedTokenBudget" data-sc-partner-input="#sc_easy_queued_token_budget_val" /><input id="sc_easy_queued_token_budget_val" class="text_pole sc-val sc-val-wide" type="text" inputmode="numeric" data-sc-slider-setting="queuedTokenBudget" data-sc-partner-input="#sc_easy_queued_token_budget" /></div>
                             </div>
                         </div>
@@ -202,11 +206,11 @@
                     <div class="sc-section-header sc-budget-subheader">
                         <h4 class="sc-section-title">
                             <span class="fa-solid fa-layer-group"></span>
-                            Injected Memory
+                            Memory Budget
                         </h4>
                         <span id="sc_easy_memory_budget_total" class="sc-context-total">0 / 0</span>
                     </div>
-                    <div id="sc_easy_memory_budget_bar" class="sc-context-bar" aria-label="Easy injected memory token usage"></div>
+                    <div id="sc_easy_memory_budget_bar" class="sc-context-bar" aria-label="Easy memory budget token usage"></div>
                     <div id="sc_easy_memory_budget_legend" class="sc-context-legend"></div>
                 </section>
                 <section class="sc-section">
@@ -761,8 +765,12 @@
                                     <span>Memory Structure</span>
                                 </div>
                                 <div class="sc-row">
+                                    <label for="sc_time_tracking"><span>Date and time tracking</span><small class="sc-hint">Scene time follows the story; real-world time uses saved chat message timestamps in UTC. Off removes tracked time anchors from memory.</small></label>
+                                    <select id="sc_time_tracking" class="text_pole" data-sc-setting="timeTrackingMode"><option value="scene">Scene time</option><option value="real">Real-world chat time (UTC)</option><option value="off">Off</option></select>
+                                </div>
+                                <div class="sc-row">
                                     <label for="sc_verbatim_token_budget">
-                                        <span>Recent Chat</span>
+                                        <span>Live Chat</span>
                                         <small class="sc-hint">Recent raw chat kept live after older chat enters the queued window.</small>
                                     </label>
                                     <div class="sc-slider-row">
@@ -773,7 +781,7 @@
                                 <div class="sc-row">
                                     <label for="sc_queued_token_budget">
                                         <span>Queued Chat</span>
-                                        <small class="sc-hint">Older raw chat queued for summarization. Automatic summarization starts when Recent + Queued is full.</small>
+                                        <small class="sc-hint">Older raw chat queued for summarization. Automatic summarization starts when Live + Queued is full.</small>
                                     </label>
                                     <div class="sc-slider-row">
                                         <input type="range" id="sc_queued_token_budget" min="4000" max="64000" step="1000" data-sc-slider-setting="queuedTokenBudget" data-sc-partner-input="#sc_queued_token_budget_val" />
@@ -782,7 +790,7 @@
                                 </div>
                                 <div class="sc-row">
                                     <label for="sc_memory_token_budget">
-                                        <span>Memory Size Limit</span>
+                                        <span>Memory Budget</span>
                                         <small class="sc-hint">Total size of all summaries sent as Summaryception memory. Bigger means more of the back-story you actually remember.</small>
                                     </label>
                                     <div class="sc-slider-row">
