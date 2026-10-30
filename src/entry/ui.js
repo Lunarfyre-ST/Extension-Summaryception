@@ -16,6 +16,7 @@ import { formatCompactTokenCount } from '../core/token-count.js';
 import { describeAutoWork } from '../core/summarization-routes.js';
 import { estimateContextPreview } from '../core/token-budget.js';
 import { buildInjection, measureInjection } from '../core/memory-injection.js';
+import { measureSummaryEfficiency } from '../core/summary-efficiency.js';
 import { syncAllSettingsToDOM, syncRoleMaskModeControl } from './ui-bind.js';
 import { updateSnippetBrowser } from './ui-snippets.js';
 import { syncConnectionPanels } from './ui-connection.js';
@@ -69,6 +70,14 @@ export async function updateUI({ queue }) {
         await renderStatusOverview('sc_status', 'enabled', overview);
         await renderStatusOverview('sc_easy_status', 'mode', overview);
         await renderBudgetStatus(effectiveSettings, work, memoryUsage);
+        if (enabledContent.advancedPanel) {
+            const efficiency = await measureSummaryEfficiency(
+                getChat(),
+                store.layers,
+                memoryUsage.total,
+            );
+            renderSummaryEfficiency(efficiency);
+        }
         await renderMemoryBudget(effectiveSettings, memoryUsage, 'easy_memory');
         renderLayerStats(effectiveSettings, store, ghostedCount);
         await renderPreview(memoryInjection, memoryUsage);
@@ -172,6 +181,30 @@ function syncMemoryModeControls(s) {
     $('#sc_memory_help_prefix_cache').toggle(isPrefixCache);
     $('#sc_manual_cache_warning').toggle(isPrefixCache);
     $('.sc-cache-mode-row').toggle(isPrefixCache);
+}
+
+/** @param {Awaited<ReturnType<typeof measureSummaryEfficiency>>} result */
+function renderSummaryEfficiency({ original, summary, efficiency }) {
+    const denominator = Math.max(original?.count || 0, summary.count, 1);
+    const estimated = Boolean(original?.estimated || summary.estimated);
+    $('#sc_summary_efficiency').text(
+        efficiency === null
+            ? 'Unavailable'
+            : `${estimated ? '~' : ''}${efficiency.toFixed(1)}% saved`,
+    );
+    $('#sc_efficiency_original_label').text(
+        original
+            ? `Original messages: ${formatBudgetTokenLabel(original.count, original.estimated)} tokens`
+            : 'Original messages: unavailable',
+    );
+    $('#sc_efficiency_summary_label').text(
+        `Summary: ${formatBudgetTokenLabel(summary.count, summary.estimated)} tokens`,
+    );
+    $('#sc_efficiency_original_bar').css(
+        'width',
+        `${((original?.count || 0) / denominator) * 100}%`,
+    );
+    $('#sc_efficiency_summary_bar').css('width', `${(summary.count / denominator) * 100}%`);
 }
 
 async function renderBudgetStatus(s, work, memoryUsage) {

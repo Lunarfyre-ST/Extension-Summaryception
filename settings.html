@@ -305,6 +305,13 @@
                     </div>
                     <div id="sc_memory_budget_bar" class="sc-context-bar" aria-label="Memory block token usage"></div>
                     <div id="sc_memory_budget_legend" class="sc-context-legend"></div>
+                    <div class="sc-section-header sc-budget-subheader">
+                        <h4 class="sc-section-title"><span class="fa-solid fa-compress"></span> Summary Efficiency</h4>
+                        <span id="sc_summary_efficiency" class="sc-context-total">Unavailable</span>
+                    </div>
+                    <div class="sc-efficiency-row"><span id="sc_efficiency_original_label">Original messages: unavailable</span><div class="sc-efficiency-track"><div id="sc_efficiency_original_bar" class="sc-efficiency-fill sc-context-verbatim"></div></div></div>
+                    <div class="sc-efficiency-row"><span id="sc_efficiency_summary_label">Summary: 0 tokens</span><div class="sc-efficiency-track"><div id="sc_efficiency_summary_bar" class="sc-efficiency-fill sc-context-layer0"></div></div></div>
+                    <small class="sc-hint">Compares the original messages represented by memory with the current injected memory, including its wrapper. Efficiency is the percentage of tokens saved; estimates are marked ~.</small>
                 </section>
                 <section class="sc-section">
                     <div class="sc-section-header">
