@@ -196,6 +196,29 @@ describe('validateLayer0OutputSize', () => {
         expect(result.repairFeedback).toBe('');
     });
 
+    it('accepts a concise narrative for a short source but rejects extremely short output', async () => {
+        const profile = resolveCallProfile(defaultSettings, {
+            kind: 'layer0',
+            sourceTokensBefore: 946,
+        });
+        const output = '<narrative>A concise narrative.</narrative>';
+        installSummaryContext({ getTokenCountAsync: async () => 41 });
+        expect((await validateLayer0OutputSize(output, profile)).valid).toBe(true);
+        installSummaryContext({ getTokenCountAsync: async () => 10 });
+        expect((await validateLayer0OutputSize(output, profile)).valid).toBe(false);
+    });
+
+    it('keeps the existing minimum for large sources', async () => {
+        installSummaryContext({ getTokenCountAsync: async () => 41 });
+        const profile = resolveCallProfile(defaultSettings, {
+            kind: 'layer0',
+            sourceTokensBefore: 2000,
+        });
+        expect(
+            (await validateLayer0OutputSize('<narrative>A narrative.</narrative>', profile)).valid,
+        ).toBe(false);
+    });
+
     it('rejects an oversized Layer 0 draft with violations and non-empty repair feedback', async () => {
         installSummaryContext({ getTokenCountAsync: async () => 500 });
         const output = [

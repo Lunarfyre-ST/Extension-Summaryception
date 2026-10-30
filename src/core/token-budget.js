@@ -14,6 +14,11 @@ export const LAYER_SAFETY_MULTIPLIER = { l0: 0.85, l1: 0.5, l2: 0.5 };
  */
 export const SUBSTANTIAL_SOURCE_TOKEN_THRESHOLD = 500;
 
+/** Scale minimum summary length for short sources, capped at the established full-size floor. */
+export function scaleSourceMinimum(fullMinimum, sourceTokens) {
+    return Math.ceil(fullMinimum * Math.min(1, Math.max(0, sourceTokens) / 1667));
+}
+
 /**
  * Integer sentence cap for a layer, derived from the configured token target.
  * @param {'l0' | 'l1' | 'l2' | number} layer

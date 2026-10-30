@@ -10,7 +10,11 @@ import {
 import { silentAdapter } from './notify.js';
 import { parseNarrativeEnvelope } from './structural-headers.js';
 import { normalizeStructuralHeaderLines } from './structural-headers.js';
-import { getSourceTokenCount, SUBSTANTIAL_SOURCE_TOKEN_THRESHOLD } from './token-budget.js';
+import {
+    getSourceTokenCount,
+    scaleSourceMinimum,
+    SUBSTANTIAL_SOURCE_TOKEN_THRESHOLD,
+} from './token-budget.js';
 
 // ─── Output Cleaning ─────────────────────────────────────────────────
 
@@ -141,7 +145,10 @@ function declinedRejection(output) {
  * @returns {string} Empty string when the draft passes, the rejection reason otherwise
  */
 function tooShortRejection(output, sourceTokens) {
-    if (sourceTokens <= SUBSTANTIAL_SOURCE_TOKEN_THRESHOLD || !isOutputTooShortForSource(output)) {
+    if (
+        sourceTokens <= SUBSTANTIAL_SOURCE_TOKEN_THRESHOLD ||
+        !isOutputTooShortForSource(output, sourceTokens)
+    ) {
         return '';
     }
     const stats = getApproximateOutputStats(output);
@@ -252,11 +259,11 @@ function countMatches(text, regex) {
     return text.match(regex)?.length || 0;
 }
 
-function isOutputTooShortForSource(text) {
+function isOutputTooShortForSource(text, sourceTokens) {
     const stats = getApproximateOutputStats(text);
     return (
-        stats.tokens < MIN_OUTPUT_TOKENS_FOR_SUBSTANTIAL_SOURCE &&
-        stats.characters < MIN_OUTPUT_CHARS_FOR_SUBSTANTIAL_SOURCE
+        stats.tokens < scaleSourceMinimum(MIN_OUTPUT_TOKENS_FOR_SUBSTANTIAL_SOURCE, sourceTokens) &&
+        stats.characters < scaleSourceMinimum(MIN_OUTPUT_CHARS_FOR_SUBSTANTIAL_SOURCE, sourceTokens)
     );
 }
 

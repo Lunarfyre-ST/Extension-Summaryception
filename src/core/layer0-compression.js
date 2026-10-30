@@ -18,6 +18,7 @@ import {
     buildSizeTargetLine,
     computeSentenceCap,
     getSourceTokenCount,
+    scaleSourceMinimum,
     SUBSTANTIAL_SOURCE_TOKEN_THRESHOLD,
     LAYER_HARD_MAX_RATIO,
     LAYER0_REPAIR_RATIO,
@@ -184,7 +185,10 @@ function buildLayer0SizeDiagnostics({
                 actualTokens: narrativeTokenCount,
                 targetTokens: bounds.target,
                 hardMaxTokens: narrativeTooLong ? bounds.max : 0,
-                minimumTokens: sourceTokens > SUBSTANTIAL_SOURCE_TOKEN_THRESHOLD ? bounds.min : 0,
+                minimumTokens:
+                    sourceTokens > SUBSTANTIAL_SOURCE_TOKEN_THRESHOLD
+                        ? scaleSourceMinimum(bounds.min, sourceTokens)
+                        : 0,
                 text: narrative,
                 repairInstruction:
                     'remove scene replay, repeated dialogue, micro-actions, and transient detail while preserving durable chronology',

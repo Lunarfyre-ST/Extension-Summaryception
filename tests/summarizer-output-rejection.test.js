@@ -150,6 +150,19 @@ describe('summarizer output rejection payloads', () => {
         expect(result.valid).toBe(true);
     });
 
+    it('accepts a concise response for a smaller source and rejects a trivial one', () => {
+        const profile = resolveCallProfile(makeSummarySettings(), {
+            kind: 'layer0',
+            sourceTokensBefore: 946,
+        });
+        const concise =
+            '<narrative>They agreed on a plan and left together before dawn. Their decision changed their relationship and resolved the immediate conflict.</narrative>';
+        expect(validateSummarizerOutputIntegrity(concise, profile).valid).toBe(true);
+        expect(
+            validateSummarizerOutputIntegrity('<narrative>They left.</narrative>', profile).valid,
+        ).toBe(false);
+    });
+
     it('rejects a meta-describing body that names none of the passage names', () => {
         const result = validateSummarizerOutputIntegrity(
             '<narrative>The passage contains several scenes of the two characters talking and shopping together.</narrative>',
