@@ -5,7 +5,9 @@ import { formatTokenValue } from '../src/core/token-count.js';
 import {
     createToastrNotifyAdapter,
     pauseMemoryToastForGeneration,
+    muteActiveSummaryNotifications,
 } from '../src/entry/ui-dialogs.js';
+import { getSettings } from '../src/foundation/settings.js';
 import { installBrowserRuntimeStub } from './test-helpers.js';
 
 function installTextCapture() {
@@ -24,6 +26,45 @@ function installTextCapture() {
  * counts; wording stays unasserted.
  */
 describe('toastr notify adapter mapping', () => {
+    it('mutes background summary progress and retry and failure notices, then resumes after unmuting', () => {
+        const { toastr } = installBrowserRuntimeStub();
+        const adapter = createToastrNotifyAdapter();
+        getSettings().muteSummaryNotifications = true;
+        const handle = adapter.progress({ label: BATCH_PROGRESS.MEMORY, total: 1 });
+        adapter.transient({ kind: 'retry-wait' });
+        adapter.transient({ kind: 'run-failed' });
+        adapter.clear(handle, { kind: BATCH_PROGRESS.UPDATED });
+        expect(handle).toBeNull();
+        expect(toastr.info).not.toHaveBeenCalled();
+        expect(toastr.warning).not.toHaveBeenCalled();
+        expect(toastr.error).not.toHaveBeenCalled();
+        expect(toastr.success).not.toHaveBeenCalled();
+        getSettings().muteSummaryNotifications = false;
+        adapter.transient({ kind: 'run-failed' });
+        expect(toastr.error).toHaveBeenCalledTimes(1);
+    });
+
+    it('closes an already open summary toast on mute without a later completion notice', () => {
+        const { toastr } = installBrowserRuntimeStub();
+        const adapter = createToastrNotifyAdapter();
+        const handle = adapter.progress({ label: BATCH_PROGRESS.MEMORY, total: 1 });
+        getSettings().muteSummaryNotifications = true;
+        muteActiveSummaryNotifications();
+        adapter.clear(handle, { kind: BATCH_PROGRESS.UPDATED });
+        expect(toastr.clear).toHaveBeenCalledTimes(1);
+        expect(toastr.success).not.toHaveBeenCalled();
+    });
+
+    it('still shows chat restoration progress while summary notifications are muted', () => {
+        const { toastr } = installBrowserRuntimeStub();
+        getSettings().muteSummaryNotifications = true;
+        const adapter = createToastrNotifyAdapter();
+        const handle = adapter.progress({ label: 'ghost-unhide', total: 2 });
+        adapter.clear(handle, { kind: 'ghost-unhidden' });
+        expect(toastr.info).toHaveBeenCalledTimes(1);
+        expect(toastr.success).toHaveBeenCalledTimes(1);
+    });
+
     it('opens one persistent info toast per progress handle', () => {
         const { toastr } = installBrowserRuntimeStub();
         const adapter = createToastrNotifyAdapter();

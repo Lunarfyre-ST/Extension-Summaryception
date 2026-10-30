@@ -1,5 +1,6 @@
 import { ELASTIC_STRATEGIES } from '../core/summarizer-engine.js';
 import { formatTokenValue } from '../core/token-count.js';
+import { getSettings } from '../foundation/settings.js';
 import {
     BATCH_PROGRESS,
     GHOST_PROGRESS,
@@ -377,10 +378,24 @@ const NOTIFY_TRANSIENT_VIEWS = {
  * @property {object} toast - Active toastr element.
  * @property {ProgressView} view - Matched display policy for the label.
  * @property {number} total - Total items reported by the progress event.
+ * @property {boolean} summaryProgress - Whether this is summary progress.
+ * @property {boolean} dismissed - Whether mute already closed the toast.
  */
 
 /** Open "Updating conversation memory" toast element, kept for the pause reword. */
 let activeMemoryToast = null;
+/** @type {Set<ToastrProgressHandle>} */
+const activeSummaryHandles = new Set();
+
+/** Close background summary progress immediately when the mute setting is enabled. */
+export function muteActiveSummaryNotifications() {
+    for (const handle of activeSummaryHandles) {
+        toastr.clear(handle.toast);
+        handle.dismissed = true;
+    }
+    activeSummaryHandles.clear();
+    activeMemoryToast = null;
+}
 
 const MEMORY_PAUSED_MESSAGE = 'Paused while you chat; memory updates after your reply.';
 
@@ -402,6 +417,7 @@ export function pauseMemoryToastForGeneration() {
 export function createToastrNotifyAdapter() {
     return {
         transient(event) {
+            if (getSettings().muteSummaryNotifications) return;
             const kind = /** @type {string} */ (event?.kind);
             const view = NOTIFY_TRANSIENT_VIEWS[kind];
             if (view) {
@@ -409,6 +425,9 @@ export function createToastrNotifyAdapter() {
             }
         },
         progress(event) {
+            const summaryProgress =
+                event.label === BATCH_PROGRESS.MEMORY || event.label === GHOST_PROGRESS.HIDE;
+            if (summaryProgress && getSettings().muteSummaryNotifications) return null;
             const view = NOTIFY_PROGRESS_VIEWS[event.label] || DEFAULT_PROGRESS_VIEW;
             const toast = toastr.info(
                 view.message ?? `${view.text}: 0 / ${event.total}`,
@@ -423,13 +442,16 @@ export function createToastrNotifyAdapter() {
             if (view.tracksForegroundPause) {
                 activeMemoryToast = toast;
             }
-            return { toast, view, total: event.total };
+            const handle = { toast, view, total: event.total, summaryProgress, dismissed: false };
+            if (summaryProgress) activeSummaryHandles.add(handle);
+            return handle;
         },
         update(handle, event) {
             if (!handle) {
                 return;
             }
             const progress = /** @type {ToastrProgressHandle} */ (handle);
+            if (progress.dismissed) return;
             if (!progress.view.everyN || event.processed % progress.view.everyN !== 0) {
                 return;
             }
@@ -440,7 +462,9 @@ export function createToastrNotifyAdapter() {
         },
         clear(handle, event) {
             if (handle) {
-                toastr.clear(/** @type {ToastrProgressHandle} */ (handle).toast);
+                const progress = /** @type {ToastrProgressHandle} */ (handle);
+                activeSummaryHandles.delete(progress);
+                if (!progress.dismissed) toastr.clear(progress.toast);
             }
             if (
                 activeMemoryToast &&
@@ -451,7 +475,10 @@ export function createToastrNotifyAdapter() {
             const terminal = event?.kind
                 ? NOTIFY_TERMINAL_VIEWS[/** @type {string} */ (event.kind)]
                 : null;
-            if (terminal) {
+            if (
+                terminal &&
+                !(getSettings().muteSummaryNotifications && event?.kind !== GHOST_PROGRESS.UNHIDDEN)
+            ) {
                 terminal();
             }
         },

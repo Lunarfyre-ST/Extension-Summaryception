@@ -29,6 +29,7 @@ import {
 } from './ui-bind.js';
 import { bindManualRunControls } from './ui-manual-run.js';
 import { bindPromptProfiles } from './ui-prompts.js';
+import { muteActiveSummaryNotifications } from './ui-dialogs.js';
 
 /**
  * @returns {void}
@@ -108,6 +109,13 @@ function bindToggleHandlers(queue) {
         '#sc_continuity_enabled',
     ].join(', ');
     bindDataSettingElements(plainToggles, { eventName: 'change' });
+    bindDataSettingElements('#sc_easy_mute_summary_notifications, #sc_mute_summary_notifications', {
+        eventName: 'change',
+        afterSave: (_settings, value) => {
+            if (value) muteActiveSummaryNotifications();
+            refreshUi();
+        },
+    });
     bindDataSettingElements('#sc_easy_time_tracking, #sc_time_tracking', {
         eventName: 'change',
         afterSave: refreshFull,

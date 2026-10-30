@@ -95,6 +95,7 @@ interface ExtensionSettings {
     enabled: boolean;
     autoPaused: boolean;
     continuityEnabled: boolean;
+    muteSummaryNotifications: boolean;
     configMode: string;
     uiMode: string;
     memoryMode: string;

@@ -90,6 +90,8 @@ Stop cancels the current summarization run.
 
 Clear removes Summaryception memory for the current chat and unghosts messages Summaryception owns. It does not delete chat messages.
 
+Enable **Mute background summary notifications** in Easy or Advanced settings to hide background summary progress, retries and errors. Manual action feedback remains visible. Muting does not change request timeouts or retry behavior.
+
 ## Advanced mode
 
 Advanced mode exposes the knobs Easy mode hides:

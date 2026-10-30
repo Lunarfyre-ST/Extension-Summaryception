@@ -226,6 +226,7 @@ export const defaultSettings = Object.freeze({
     autoPaused: false,
     // Opt-in Continuity Auditor (issue #28); off until the user enables it.
     continuityEnabled: false,
+    muteSummaryNotifications: false,
     memoryMode: MEMORY_MODES.BALANCED,
     cacheTtlMinutes: 30, // provider cache lifetime, Prefix Cache only
     // Decoupled from uiMode: which complexity panel (Easy/Advanced) to render,

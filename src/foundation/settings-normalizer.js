@@ -135,7 +135,7 @@ function asSettingsRecord(settings) {
  */
 function normalizeContinuitySettings(settings) {
     let changed = false;
-    for (const key of ['continuityEnabled']) {
+    for (const key of ['continuityEnabled', 'muteSummaryNotifications']) {
         const value = settings[key] === true;
         if (settings[key] !== value) {
             settings[key] = value;
