@@ -20,12 +20,14 @@ const IDLE_MESSAGES = {
  * @returns {void}
  */
 export function showManualRunIdle(strategy) {
+    if (getSettings().muteSummaryNotifications) return;
     toastr.info(IDLE_MESSAGES[strategy], TOAST_TITLE);
 }
 /**
  * @returns {void}
  */
 export function showBusySummaryToast() {
+    if (getSettings().muteSummaryNotifications) return;
     toastr.warning('Already summarizing. Please wait.', TOAST_TITLE);
 }
 
@@ -33,6 +35,7 @@ export function showBusySummaryToast() {
  * @returns {void}
  */
 export function showForegroundActiveToast() {
+    if (getSettings().muteSummaryNotifications) return;
     toastr.warning('Foreground generation is active. Try again once it completes.', TOAST_TITLE);
 }
 
@@ -105,7 +108,7 @@ function showSlopIncomplete(outcome) {
 const SLOP_NOTICES = {
     idle: () => showManualRunIdle(ELASTIC_STRATEGIES.SLOP),
     completed: () =>
-        toastr.success('Slop Breaker complete. Reloading chat context.', TOAST_TITLE, {
+        toastr.success('Slop Breaker complete.', TOAST_TITLE, {
             timeOut: 3000,
         }),
     blocked: (outcome) => {
@@ -170,13 +173,16 @@ export function manualRunView(strategy) {
  * @returns {unknown}
  */
 export function createManualProgressToast(progress, view, onCancel) {
-    return toastr.info(getProgressText(progress, view.label), view.title, {
+    if (getSettings().muteSummaryNotifications) return null;
+    const toast = toastr.info(getProgressText(progress, view.label), view.title, {
         timeOut: 0,
         extendedTimeOut: 0,
         tapToDismiss: false,
         closeButton: true,
         onCloseClick: onCancel,
     });
+    activeManualSummaryToasts.add(toast);
+    return toast;
 }
 
 /**
@@ -186,6 +192,7 @@ export function createManualProgressToast(progress, view, onCancel) {
  * @returns {void}
  */
 export function updateManualProgressToast(progressToast, progress, view) {
+    if (!activeManualSummaryToasts.has(progressToast)) return;
     $(progressToast)
         .find('.toast-message')
         .text(`${getProgressText(progress, view.label)}\nClick x to pause`);
@@ -196,7 +203,7 @@ export function updateManualProgressToast(progressToast, progress, view) {
  * @returns {void}
  */
 export function clearManualProgressToast(progressToast) {
-    if (progressToast) {
+    if (activeManualSummaryToasts.delete(progressToast)) {
         toastr.clear(progressToast);
     }
 }
@@ -208,6 +215,7 @@ export function clearManualProgressToast(progressToast) {
  * @returns {unknown}
  */
 export function showStaleCacheAdvice(advice) {
+    if (getSettings().muteSummaryNotifications) return null;
     return toastr.info(
         `The provider cache is stale: the last turn is ${advice.staleMinutes} minutes old and your cache TTL is ${advice.ttlMinutes} minutes. ` +
             `About ${advice.queuedTurns} turns wait in the summarize queue. ` +
@@ -386,6 +394,8 @@ const NOTIFY_TRANSIENT_VIEWS = {
 let activeMemoryToast = null;
 /** @type {Set<ToastrProgressHandle>} */
 const activeSummaryHandles = new Set();
+/** @type {Set<unknown>} */
+const activeManualSummaryToasts = new Set();
 
 /** Close background summary progress immediately when the mute setting is enabled. */
 export function muteActiveSummaryNotifications() {
@@ -394,6 +404,8 @@ export function muteActiveSummaryNotifications() {
         handle.dismissed = true;
     }
     activeSummaryHandles.clear();
+    for (const toast of activeManualSummaryToasts) toastr.clear(toast);
+    activeManualSummaryToasts.clear();
     activeMemoryToast = null;
 }
 

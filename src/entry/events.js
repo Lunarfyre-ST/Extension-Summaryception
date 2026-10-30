@@ -392,7 +392,12 @@ let staleCacheAdviceKey = '';
 async function checkStaleCacheAdvice(queue) {
     try {
         const settings = getEffectiveSettings();
-        if (!settings.enabled || !isProviderCacheMode(settings) || queue.isRequestLive()) {
+        if (
+            !settings.enabled ||
+            settings.muteSummaryNotifications ||
+            !isProviderCacheMode(settings) ||
+            queue.isRequestLive()
+        ) {
             return;
         }
         const chat = getChat();

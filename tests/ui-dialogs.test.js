@@ -69,8 +69,13 @@ describe('manual run display policy', () => {
         const text = vi.fn();
         globalThis.$ = vi.fn(() => ({ find: () => ({ text }) }));
 
+        const toast = createManualProgressToast(
+            { completed: 0, failed: 0, totalBatches: 3 },
+            manualRunView(ELASTIC_STRATEGIES.SLOP),
+            () => {},
+        );
         updateManualProgressToast(
-            {},
+            toast,
             { completed: 2, failed: 1, totalBatches: 3 },
             manualRunView(ELASTIC_STRATEGIES.SLOP),
         );

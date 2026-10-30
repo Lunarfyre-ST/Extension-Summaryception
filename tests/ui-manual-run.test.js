@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { bindManualRunControls } from '../src/entry/ui-manual-run.js';
 import { TOAST_TITLE } from '../src/foundation/constants.js';
+import { getSettings } from '../src/foundation/settings.js';
 import { createJQueryHarness, installSummaryContext, makeToastrMock } from './test-helpers.js';
 
 const summarizerMocks = vi.hoisted(() => ({
@@ -69,6 +70,33 @@ describe('manual run outcome notices', () => {
 
     afterEach(() => {
         delete globalThis.document;
+    });
+
+    it('does not reload after a completed manual summary', async () => {
+        const reload = vi.fn();
+        vi.stubGlobal('location', { reload });
+        summarizerMocks.runManual.mockResolvedValue({
+            status: 'completed',
+            completed: 1,
+            failed: 0,
+            totalBatches: 1,
+        });
+        await dom.trigger('click', '#sc_force_summarize, #sc_easy_force_summarize', button);
+        expect(reload).not.toHaveBeenCalled();
+        vi.unstubAllGlobals();
+    });
+
+    it('suppresses manual start, progress and completion when muted', async () => {
+        getSettings().muteSummaryNotifications = true;
+        summarizerMocks.runManual.mockImplementation(async (_deps, _strategy, options) => {
+            options.onStart({ completed: 0, failed: 0, totalBatches: 1 });
+            options.onProgress({ completed: 1, failed: 0, totalBatches: 1 });
+            return { status: 'completed', completed: 1, failed: 0, totalBatches: 1 };
+        });
+        await dom.trigger('click', '#sc_force_summarize, #sc_easy_force_summarize', button);
+        expect(globalThis.toastr.info).not.toHaveBeenCalled();
+        expect(globalThis.toastr.success).not.toHaveBeenCalled();
+        expect(globalThis.toastr.error).not.toHaveBeenCalled();
     });
 
     it('renders the notice the outcome status selects', async () => {

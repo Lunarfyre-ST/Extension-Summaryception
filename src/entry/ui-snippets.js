@@ -1,5 +1,6 @@
 import { TOAST_TITLE, layerLabel, listNonEmptyLayers } from '../foundation/constants.js';
 import { refreshUi } from '../foundation/refresh.js';
+import { getSettings } from '../foundation/settings.js';
 import { getChatStore } from '../foundation/chat-store.js';
 import { getSnippetDisplayMeta } from '../core/snippet-metadata.js';
 import {
@@ -422,14 +423,15 @@ async function onSnippetRedoClick() {
         return;
     }
 
-    toastr.info(
-        `Regenerating summary for turns ${target.range[0]}-${target.range[1]}...`,
-        TOAST_TITLE,
-        {
-            timeOut: 3000,
-            progressBar: true,
-        },
-    );
+    if (!getSettings().muteSummaryNotifications)
+        toastr.info(
+            `Regenerating summary for turns ${target.range[0]}-${target.range[1]}...`,
+            TOAST_TITLE,
+            {
+                timeOut: 3000,
+                progressBar: true,
+            },
+        );
     await runSnippetRegeneration($(this), position);
 }
 
@@ -453,7 +455,7 @@ function handleRegenerationTargetStatus(target) {
         showBusySummaryToast();
         return;
     }
-    if (target.status === 'unsupported') {
+    if (target.status === 'unsupported' && !getSettings().muteSummaryNotifications) {
         toastr.warning(
             'Only Layer 0 (turn summary) snippets can be regenerated. Promoted meta-summaries have no source turns.',
             TOAST_TITLE,
@@ -488,13 +490,15 @@ async function runSnippetRegeneration(btn, position) {
 function handleRegenerationResult(result) {
     if (result.status === 'regenerated') {
         refreshUi();
-        toastr.success(
-            `Snippet regenerated for turns ${result.range[0]}-${result.range[1]}`,
-            TOAST_TITLE,
-            { timeOut: 3000 },
-        );
+        if (!getSettings().muteSummaryNotifications)
+            toastr.success(
+                `Snippet regenerated for turns ${result.range[0]}-${result.range[1]}`,
+                TOAST_TITLE,
+                { timeOut: 3000 },
+            );
         return;
     }
+    if (getSettings().muteSummaryNotifications) return;
     if (result.status === 'empty-source') {
         toastr.error('Source turns are empty - cannot regenerate.', TOAST_TITLE);
     } else if (result.status === 'aborted') {

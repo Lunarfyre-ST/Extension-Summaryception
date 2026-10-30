@@ -63,9 +63,9 @@ async function runManualSummarization($button, idleHtml, { run, notify, view }) 
         outcome = await run(options);
     } catch (err) {
         error(err);
-        toastr.error('Summarization failed - check console.', TOAST_TITLE, {
-            timeOut: 8000,
-        });
+        if (!getEffectiveSettings().muteSummaryNotifications) {
+            toastr.error('Summarization failed - check console.', TOAST_TITLE, { timeOut: 8000 });
+        }
         return;
     } finally {
         clearManualProgressToast(progressToast);
@@ -75,9 +75,9 @@ async function runManualSummarization($button, idleHtml, { run, notify, view }) 
         refreshUi();
     }
     if (outcome !== undefined) {
-        view.notices[outcome.status]?.(outcome);
+        if (!getEffectiveSettings().muteSummaryNotifications)
+            view.notices[outcome.status]?.(outcome);
         refreshPreview();
-        reloadAfterManualRun(outcome);
     }
 }
 
@@ -120,9 +120,13 @@ async function executeForceSummarize($button, notify) {
                     showManualRunIdle(ELASTIC_STRATEGIES.FORCE);
                     return;
                 }
-                toastr.info(`${preview.backlog} turns ready to process. Starting...`, TOAST_TITLE, {
-                    timeOut: 2000,
-                });
+                if (!getEffectiveSettings().muteSummaryNotifications) {
+                    toastr.info(
+                        `${preview.backlog} turns ready to process. Starting...`,
+                        TOAST_TITLE,
+                        { timeOut: 2000 },
+                    );
+                }
 
                 return runManual(manualRunnerDeps, ELASTIC_STRATEGIES.FORCE, options);
             },
@@ -165,6 +169,7 @@ async function onSlopBreaker(buttonEl, notify) {
 }
 
 function showManualCacheWarning(settings) {
+    if (settings.muteSummaryNotifications) return;
     if (settings.memoryMode !== MEMORY_MODES.PREFIX_CACHE) {
         return;
     }
@@ -173,26 +178,6 @@ function showManualCacheWarning(settings) {
         TOAST_TITLE,
         { timeOut: 5000 },
     );
-}
-
-/**
- * @param {import('../core/run-outcome.js').ManualRunOutcome | undefined} outcome
- * @returns {void}
- */
-function reloadAfterManualRun(outcome) {
-    if (outcome?.status === 'completed') {
-        reloadPage();
-    }
-}
-
-/**
- * @returns {void}
- */
-export function reloadPage() {
-    const reload = globalThis.location?.reload;
-    if (typeof reload === 'function') {
-        reload.call(globalThis.location);
-    }
 }
 
 /**
