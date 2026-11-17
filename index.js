@@ -127,9 +127,7 @@ import { registerSlashCommands } from './src/entry/commands.js';
         }),
     );
     eventSource.on(eventTypes.CHAT_CHANGED, () => onChatChanged({ gate, queue }));
-    eventSource.on(eventTypes.GENERATION_STARTED, (...args) =>
-        onGenerationStarted(args, { gate, queue }),
-    );
+    eventSource.on(eventTypes.GENERATION_STARTED, (...args) => onGenerationStarted(args, { gate }));
     if (eventTypes.GENERATE_AFTER_DATA) {
         eventSource.on(eventTypes.GENERATE_AFTER_DATA, onGenerateAfterData);
     }

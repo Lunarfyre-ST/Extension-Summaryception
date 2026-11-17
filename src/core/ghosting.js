@@ -1,5 +1,5 @@
 import { GHOST_PROGRESS } from '../foundation/constants.js';
-import { executeSlashCommandsWithOptions, getChat } from '../foundation/context.js';
+import { executeSlashCommandsWithOptions, getChat, getContext } from '../foundation/context.js';
 import {
     ensureMessageScId,
     rangesFromSortedIndices,
@@ -54,7 +54,8 @@ function setGhostedMessageIds(store, nextIds) {
  * every sourceMessageId across all layers. Desired messages that still need
  * ownership or a visual hide go through the ranged hide engine. Owned ids no
  * longer referenced by any layer are released through the unhide path.
- * Ownership ends up exactly the desired set. Desired ids whose messages no
+ * Ownership ends up the desired set minus messages hidden outside
+ * Summaryception or excluded from hiding. Desired ids whose messages no
  * longer resolve stay owned but inert.
  * @param {GhostRangeOptions} options - Carries the notify adapter and the Foreground Gate. Without a notify adapter, the work runs silent.
  * @returns {Promise<{ hidden: number, unhidden: number }>} Messages covered by the applied hide and release ranges.
@@ -64,6 +65,9 @@ export async function syncGhosting(options) {
     const store = getChatStore();
     const desired = collectSnippetSourceIds(store.layers);
     const desiredOwned = new Set(desired);
+    // A message hidden outside Summaryception (or one it must not hide) is never
+    // claimed: claiming it would make a later release unhide the user's own hide.
+    const unclaimable = collectUnclaimableIds(chat, store, desired);
 
     const staleIds = store.ghostedMessageIds.filter((id) => !desiredOwned.has(id));
     const staleRanges = rangesFromSortedIndices(resolveScIdsToIndices(chat, staleIds));
@@ -84,24 +88,27 @@ export async function syncGhosting(options) {
         hidden += getRangeSize(range);
     }
 
-    setGhostedMessageIds(store, desired);
+    setGhostedMessageIds(
+        store,
+        desired.filter((id) => !unclaimable.has(id)),
+    );
     return { hidden, unhidden: countRangeMessages(staleRanges) };
 }
 
 /**
- * Unhide every message in the chat through the host full-range command and
- * wipe Summaryception ghost ownership.
+ * Unhide every store-owned message and wipe Summaryception ghost ownership.
+ * Messages hidden outside Summaryception stay hidden.
  * @param {object} [_options] - Reserved option bag kept for parity with the other Ghosting entry points; Clear releases ownership without a gate.
  * @returns {Promise<void>}
  */
 export async function clearAllGhosting(_options = {}) {
     const chat = getChat();
-    if (chat.length > 0) {
-        await executeSlashCommandsWithOptions(`/unhide 0-${chat.length - 1}`, {
-            showOutput: false,
-        });
+    const store = getChatStore();
+    const ranges = rangesFromSortedIndices(resolveScIdsToIndices(chat, store.ghostedMessageIds));
+    for (const range of ranges) {
+        await executeSlashRangeCommand('unhide', range, warn);
     }
-    setGhostedMessageIds(getChatStore(), []);
+    setGhostedMessageIds(store, []);
 }
 
 /**
@@ -124,10 +131,28 @@ export function countGhostedMessages() {
  * @returns {Promise<void>}
  */
 export async function ghostMessagesInRange(startIdx, endIdx, options) {
+    // Indices only mean something in the chat they were planned against. A
+    // range the gate defers can re-run after a chat switch; it is dropped then.
+    const chatId = readActiveChatId();
     await options.gate.runEffect({
         kind: getGhostEffectKind(startIdx, endIdx, options),
-        apply: async (ctx) => await ghostMessagesInRangeEffect(startIdx, endIdx, ctx, options),
+        apply: async (ctx) => {
+            if (chatId !== null && readActiveChatId() !== chatId) {
+                debug(`Ghosting ${startIdx}-${endIdx} dropped; the chat changed.`);
+                return true;
+            }
+            return await ghostMessagesInRangeEffect(startIdx, endIdx, ctx, options);
+        },
     });
+}
+
+/**
+ * The host's id for the open chat, or null when the host does not report one.
+ * @returns {string | null}
+ */
+function readActiveChatId() {
+    const id = /** @type {{ chatId?: unknown }} */ (getContext())?.chatId;
+    return id === undefined || id === null || id === '' ? null : String(id);
 }
 
 /**
@@ -237,9 +262,10 @@ function deferRemainingGhosting(nextStart, endIdx, options, progress) {
  * @returns {Array<[number, number]>}
  */
 function collectHideRanges(chat, store, range) {
+    const rules = createGhostRules(store);
     const indices = [];
     for (let i = range[0]; i <= range[1]; i++) {
-        if (messageNeedsGhosting(chat[i], store)) {
+        if (messageNeedsGhosting(chat[i], rules)) {
             indices.push(i);
         }
     }
@@ -247,45 +273,88 @@ function collectHideRanges(chat, store, range) {
 }
 
 /**
+ * Desired ids that resolve to a message Summaryception must not claim.
+ * @param {ChatMessage[]} chat
+ * @param {SummaryceptionStore} store
+ * @param {string[]} desired
+ * @returns {Set<string>}
+ */
+function collectUnclaimableIds(chat, store, desired) {
+    const rules = createGhostRules(store);
+    const unclaimable = new Set();
+    for (const index of resolveScIdsToIndices(chat, desired)) {
+        const msg = chat[index];
+        if (msg && !isGhostableMessage(msg, rules)) {
+            unclaimable.add(msg.sc_id);
+        }
+    }
+    return unclaimable;
+}
+
+/**
+ * Read the ownership set and the hide setting once per scan; per-message
+ * reads made long-chat scans quadratic.
+ * @param {SummaryceptionStore} store
+ * @returns {GhostRules}
+ */
+function createGhostRules(store) {
+    return {
+        owned: new Set(store.ghostedMessageIds),
+        hideNonText: getEffectiveSettings().hideNonTextMessages !== false,
+    };
+}
+
+/**
+ * @typedef {object} GhostRules
+ * @property {Set<string>} owned - Store-owned message ids.
+ * @property {boolean} hideNonText - Whether text-less messages are hidden too.
+ */
+
+/**
  * Check whether a message needs Summaryception ownership or visual hiding.
  * @param {ChatMessage | undefined} msg
- * @param {SummaryceptionStore} store
+ * @param {GhostRules} rules
  * @returns {boolean}
  */
-function messageNeedsGhosting(msg, store) {
-    if (!msg || !isGhostableMessage(msg, store)) {
+function messageNeedsGhosting(msg, rules) {
+    if (!msg || !isGhostableMessage(msg, rules)) {
         return false;
     }
-
-    const owned = typeof msg.sc_id === 'string' && store.ghostedMessageIds.includes(msg.sc_id);
-    return !owned || !isVisuallyHidden(msg);
+    return !isOwned(msg, rules) || !isVisuallyHidden(msg);
 }
 
 /**
  * @param {ChatMessage | undefined} msg
- * @param {SummaryceptionStore} store
+ * @param {GhostRules} rules
  * @returns {boolean}
  */
-function isGhostableMessage(msg, store) {
+function isGhostableMessage(msg, rules) {
     if (!msg) {
         return false;
     }
-    const hideNonText = getEffectiveSettings().hideNonTextMessages !== false;
-    if (!hideNonText && !msg.mes?.trim()) {
+    if (!rules.hideNonText && !msg.mes?.trim()) {
         return false;
     }
-    return !isUserHidden(msg, store);
+    return !isUserHidden(msg, rules);
+}
+
+/**
+ * @param {ChatMessage} msg
+ * @param {GhostRules} rules
+ * @returns {boolean}
+ */
+function isOwned(msg, rules) {
+    return typeof msg.sc_id === 'string' && rules.owned.has(msg.sc_id);
 }
 
 /**
  * Check whether a message is hidden outside Summaryception ownership.
  * @param {ChatMessage} msg
- * @param {SummaryceptionStore} store
+ * @param {GhostRules} rules
  * @returns {boolean}
  */
-function isUserHidden(msg, store) {
-    const owned = typeof msg.sc_id === 'string' && store.ghostedMessageIds.includes(msg.sc_id);
-    return isVisuallyHidden(msg) && !owned;
+function isUserHidden(msg, rules) {
+    return isVisuallyHidden(msg) && !isOwned(msg, rules);
 }
 
 /**

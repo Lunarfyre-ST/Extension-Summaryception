@@ -33,7 +33,8 @@
 - Injection text and its token cost come from one Memory Injection read model (src/core/memory-injection.js). Build once and measure the built injection; never re-derive the text to count it.
 - Ghosting receives the notify adapter through its options. The notify adapter, the Summarizer Dispatch, and the Usage Ledger enter core only through explicit arguments; entry wiring creates and distributes the instances.
 - Unhide only store-owned messages.
-- Clear unhides the chat and removes extension-owned chat data.
+- Clear unhides store-owned messages and removes extension-owned chat data; messages hidden outside Summaryception stay hidden.
+- Ghosting never claims a message hidden outside Summaryception.
 - Standard placements use the host extension prompt.
 - Macro-only placement exposes assembled memory for custom prompt layouts.
 - Refresh state-derived snippet metadata after any manual Layer 0 snippet edit.

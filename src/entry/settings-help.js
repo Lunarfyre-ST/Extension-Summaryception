@@ -143,10 +143,13 @@ function getHintHost($target, $selected) {
 
 function addHelpIcon($target, $selected) {
     ensureChild($target, HELP_ICON_SELECTOR, () => {
-        const $icon = $('<span class="sc-help-icon fa-solid fa-circle-question"></span>').attr(
-            'aria-hidden',
-            'true',
-        );
+        // A focusable button so touch and keyboard users reach the help too,
+        // not only mouse hover.
+        const $icon = $('<span class="sc-help-icon fa-solid fa-circle-question"></span>').attr({
+            role: 'button',
+            tabindex: '0',
+            'aria-label': 'Show help',
+        });
         const $title = getTitleTarget($target, $selected);
         if ($title.length) {
             $icon.insertAfter($title);
@@ -252,6 +255,33 @@ function bindHelpTooltip($settings, $tooltip) {
         }, HELP_TOOLTIP_DELAY_MS);
     });
     $settings.on(`mouseleave${HELP_EVENT_NS}`, HELP_ICON_SELECTOR, hide);
+    // Tap, click, Enter, or Space toggles the tooltip right away. The icon
+    // sits inside labels, so the click must not also toggle the control.
+    const toggle = (icon) => {
+        clearTooltipTimer();
+        if ($tooltip.is(':visible') && $tooltip.data('scAnchor') === icon) {
+            hideTooltip($tooltip);
+            return;
+        }
+        showTooltip($settings, $tooltip, getHelpTarget($(icon)), icon);
+    };
+    $settings.on(`click${HELP_EVENT_NS}`, HELP_ICON_SELECTOR, function (event) {
+        event.preventDefault();
+        event.stopPropagation();
+        toggle(this);
+    });
+    $settings.on(`keydown${HELP_EVENT_NS}`, HELP_ICON_SELECTOR, function (event) {
+        if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            event.stopPropagation();
+            toggle(this);
+        }
+    });
+    $(document).on(`click${HELP_EVENT_NS}`, (event) => {
+        if (!$(event.target).closest(HELP_ICON_SELECTOR).length) {
+            hide();
+        }
+    });
     $settings.on(`focusout${HELP_EVENT_NS}`, HELP_FOCUS_SELECTOR, hide);
     $settings.on(`click${HELP_EVENT_NS}`, '.sc-tab-button, .sc-prompt-segment-button', hide);
     $settings.on(`scroll${HELP_EVENT_NS}`, hide);
@@ -293,6 +323,7 @@ function showTooltip($settings, $tooltip, $target, anchor) {
         .append($('<div class="sc-help-tooltip-title"></div>').text(entry.title))
         .append($('<div class="sc-help-tooltip-body"></div>').text(entry.detail))
         .attr('aria-hidden', 'false')
+        .data('scAnchor', anchor)
         .css({ display: 'block', visibility: 'hidden' });
 
     positionTooltip($settings, $tooltip, anchor);
@@ -300,7 +331,7 @@ function showTooltip($settings, $tooltip, $target, anchor) {
 }
 
 function hideTooltip($tooltip) {
-    $tooltip.attr('aria-hidden', 'true').hide();
+    $tooltip.attr('aria-hidden', 'true').removeData('scAnchor').hide();
 }
 
 function positionTooltip($settings, $tooltip, anchor) {

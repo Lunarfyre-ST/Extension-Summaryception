@@ -129,9 +129,15 @@
     opacity: 0.72;
     vertical-align: baseline;
 }
-.sc-help-icon:hover {
+.sc-help-icon:hover,
+.sc-help-icon:focus-visible {
     color: var(--sc-accent);
     opacity: 1;
+}
+.sc-help-icon:focus-visible {
+    outline: 1px solid var(--sc-accent);
+    outline-offset: 2px;
+    border-radius: 50%;
 }
 .sc-help-row-hint {
     margin: -3px 0 5px;
@@ -924,6 +930,21 @@
     }
     .sc-snippet { grid-template-columns: minmax(0, 1fr) auto auto; }
     .sc-snippet-meta { grid-column: 1 / -1; max-width: none; }
+}
+
+/* Touch screens: finger-sized targets for the help icon and snippet actions. */
+@media (pointer: coarse) {
+    .sc-help-icon {
+        padding: 6px;
+        margin: -6px -2px -6px 0;
+    }
+    .sc-snippet-delete,
+    .sc-snippet-redo {
+        width: 36px;
+        min-width: 36px;
+        min-height: 36px;
+    }
+    .sc-snippet-delete { margin-left: 6px; }
 }
 
 /* Continuity Mark (glossary: Continuity Mark / Live Mark) on chat messages. */

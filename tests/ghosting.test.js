@@ -247,6 +247,65 @@ describe('syncGhosting ownership sync', () => {
         expect(outcome).toEqual({ hidden: 0, unhidden: 0 });
     });
 
+    it('never claims a message the user hid, so releasing the snippet keeps it hidden', async () => {
+        const chat = [
+            makeMessage({ scId: 'message-0' }),
+            makeMessage({ scId: 'message-1', isSystem: true }),
+            makeMessage({ scId: 'message-2' }),
+        ];
+        const store = makeSummaryStore({
+            ghostedMessageIds: [],
+            layers: [
+                [
+                    {
+                        text: 'summary',
+                        sourceMessageIds: ['message-0', 'message-1', 'message-2'],
+                    },
+                ],
+            ],
+        });
+        const { calls, runtime } = installWith(chat, store);
+
+        await syncGhosting({ gate });
+
+        expect(calls).toEqual(['/hide 0', '/hide 2']);
+        expect(runtime.chatMetadata.summaryception.ghostedMessageIds).toEqual([
+            'message-0',
+            'message-2',
+        ]);
+
+        // The snippet goes away: only the messages Summaryception hid come back.
+        calls.length = 0;
+        chat[0].is_system = true;
+        chat[2].is_system = true;
+        store.layers = [];
+        await syncGhosting({ gate });
+
+        expect(calls).toEqual(['/unhide 0', '/unhide 2']);
+    });
+
+    it('does not claim text-less messages it leaves visible', async () => {
+        const chat = [
+            makeMessage({ scId: 'message-0' }),
+            makeMessage({ scId: 'message-1', mes: '' }),
+        ];
+        const store = makeSummaryStore({
+            layers: [[{ text: 'summary', sourceMessageIds: ['message-0', 'message-1'] }]],
+        });
+        const calls = [];
+        const runtime = installSummaryContext({
+            chat,
+            metadata: { summaryception: store },
+            settings: { hideNonTextMessages: false },
+            executeSlashCommandsWithOptions: async (command) => calls.push(String(command)),
+        });
+
+        await syncGhosting({ gate });
+
+        expect(calls).toEqual(['/hide 0']);
+        expect(runtime.chatMetadata.summaryception.ghostedMessageIds).toEqual(['message-0']);
+    });
+
     it('emits no notify events for a background sync with nothing to do', async () => {
         const recorder = makeNotifyRecorder();
         installSummaryContext({
@@ -269,13 +328,18 @@ describe('syncGhosting ownership sync', () => {
  * every call site reads ownership through one module.
  */
 describe('clearAllGhosting', () => {
-    it('unhides the full chat range and wipes ownership', async () => {
+    it('unhides only owned messages and wipes ownership', async () => {
         const calls = [];
         const runtime = installSummaryContext({
-            chat: makeMessages(3),
+            chat: [
+                makeMessage({ scId: 'message-0', isHidden: true }),
+                makeMessage({ scId: 'message-1', isHidden: true }),
+                makeMessage({ scId: 'message-2', isHidden: true }),
+                makeMessage({ scId: 'message-3', isSystem: true }),
+            ],
             metadata: {
                 summaryception: makeSummaryStore({
-                    ghostedMessageIds: ['message-0', 'message-2'],
+                    ghostedMessageIds: ['message-0', 'message-1', 'message-2'],
                     layers: [[{ text: 'summary', sourceMessageIds: ['message-0'] }]],
                 }),
             },
@@ -284,8 +348,30 @@ describe('clearAllGhosting', () => {
 
         await clearAllGhosting();
 
+        // message-3 was hidden outside Summaryception and stays hidden.
         expect(calls).toEqual(['/unhide 0-2']);
         expect(runtime.chatMetadata.summaryception.ghostedMessageIds).toEqual([]);
+    });
+
+    it('leaves a user-hidden message between owned ranges hidden', async () => {
+        const calls = [];
+        installSummaryContext({
+            chat: [
+                makeMessage({ scId: 'message-0', isHidden: true }),
+                makeMessage({ scId: 'message-1', isHidden: true }),
+                makeMessage({ scId: 'message-2', isHidden: true }),
+            ],
+            metadata: {
+                summaryception: makeSummaryStore({
+                    ghostedMessageIds: ['message-0', 'message-2'],
+                }),
+            },
+            executeSlashCommandsWithOptions: async (command) => calls.push(String(command)),
+        });
+
+        await clearAllGhosting();
+
+        expect(calls).toEqual(['/unhide 0', '/unhide 2']);
     });
 
     it('skips the slash command for an empty chat but still wipes ownership', async () => {
@@ -411,5 +497,47 @@ describe('ghosting mutation epoch', () => {
         await clearAllGhosting();
 
         expect(runtime.chatMetadata.summaryception.mutationEpoch).toBe(2);
+    });
+});
+
+/**
+ * A hide the Foreground Gate defers re-runs later. Its indices belong to the
+ * chat it was planned in, so a chat switch in between drops it.
+ */
+describe('deferred ghosting across a chat switch', () => {
+    it('drops a deferred hide when the chat changed before the freeze lifted', async () => {
+        const calls = [];
+        const runtime = installSummaryContext({
+            chat: makeMessages(3),
+            chatId: 'chat-a',
+            executeSlashCommandsWithOptions: async (command) => calls.push(String(command)),
+        });
+        gate.beginGeneration();
+
+        await ghostMessagesInRange(0, 2, { gate });
+        expect(calls).toEqual([]);
+
+        runtime.chatId = 'chat-b';
+        runtime.chat = makeMessages(3);
+        runtime.chatMetadata = { summaryception: makeSummaryStore() };
+        await gate.endGeneration();
+
+        expect(calls).toEqual([]);
+        expect(runtime.chatMetadata.summaryception.ghostedMessageIds).toEqual([]);
+    });
+
+    it('applies a deferred hide in the same chat once the freeze lifts', async () => {
+        const calls = [];
+        installSummaryContext({
+            chat: makeMessages(3),
+            chatId: 'chat-a',
+            executeSlashCommandsWithOptions: async (command) => calls.push(String(command)),
+        });
+        gate.beginGeneration();
+
+        await ghostMessagesInRange(0, 2, { gate });
+        await gate.endGeneration();
+
+        expect(calls).toEqual(['/hide 0-2']);
     });
 });

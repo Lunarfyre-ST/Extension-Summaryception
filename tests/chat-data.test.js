@@ -64,12 +64,12 @@ afterEach(() => {
 });
 
 describe('clearChatData', () => {
-    it('removes every shape of Extension Chat Data, unhides the chat, and writes the file once', async () => {
+    it('removes every shape of Extension Chat Data, unhides owned messages, and writes the file once', async () => {
         const { commands, saveMetadata, saveChat, chat, store, ctx } = installDirtyChat();
 
         await clearChatData();
 
-        // Ghosting: the host full-range unhide ran and ownership was released.
+        // Ghosting: the owned range was unhidden and ownership was released.
         expect(commands).toEqual(['/unhide 0-1']);
         // The Chat Store is emptied in place, never deleted and recreated.
         expect(ctx.chatMetadata.summaryception).toBe(store);
@@ -91,7 +91,8 @@ describe('clearChatData', () => {
         await clearChatData();
         await clearChatData();
 
-        expect(commands).toEqual(['/unhide 0-1', '/unhide 0-1']);
+        // The second run finds no owned messages, so it unhides nothing.
+        expect(commands).toEqual(['/unhide 0-1']);
         expect(ctx.chatMetadata.summaryception).toBe(store);
         expect(store.layers).toEqual([]);
         expect(store.ghostedMessageIds).toEqual([]);

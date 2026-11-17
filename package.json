@@ -38,6 +38,9 @@
     "keywords": [],
     "author": "",
     "license": "AGPL-3.0-or-later",
+    "engines": {
+        "node": ">=20"
+    },
     "bugs": {
         "url": "https://github.com/vadash/Extension-Summaryception/issues"
     },

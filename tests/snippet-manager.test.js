@@ -68,6 +68,43 @@ describe('updateSnippetTextAt', () => {
             status: 'updated',
         });
     });
+
+    it('follows the edited snippet when a background commit shifted its index', async () => {
+        const { store, snippet } = installReadySnippet();
+        // A promotion removed an earlier snippet: the editor's index 1 now points past the end.
+        const editorIndex = 1;
+
+        await expect(
+            updateSnippetTextAt(0, editorIndex, 'new text', { gate, expectedText: 'old summary' }),
+        ).resolves.toEqual({ status: 'updated' });
+
+        expect(snippet.text).toBe('new text');
+        expect(store.layers[0]).toHaveLength(1);
+    });
+
+    it('refuses to overwrite a different snippet that moved into the edited index', async () => {
+        const { store } = installReadySnippet();
+        store.layers[0].unshift({ text: 'other summary', sourceMessageIds: ['user-id'] });
+        store.layers[0][1].text = 'promoted away';
+
+        await expect(
+            updateSnippetTextAt(0, 0, 'new text', { gate, expectedText: 'old summary' }),
+        ).resolves.toEqual({ status: 'conflict' });
+
+        expect(store.layers[0].map((item) => item.text)).toEqual([
+            'other summary',
+            'promoted away',
+        ]);
+    });
+
+    it('reports unchanged when the editor closes without edits after its snippet moved', async () => {
+        const { store } = installReadySnippet();
+        store.layers[0][0].text = 'something else';
+
+        await expect(
+            updateSnippetTextAt(0, 0, 'old summary', { gate, expectedText: 'old summary' }),
+        ).resolves.toEqual({ status: 'unchanged' });
+    });
 });
 
 describe('isRegenerationCandidate', () => {
@@ -125,6 +162,40 @@ describe('snippet regeneration request outcomes', () => {
         expect(snippet.regenerated).toBe(true);
         // Ghost step acquires snippet ownership (bump) + the Snippet Commit's own bump.
         expect(store.mutationEpoch).toBe(2);
+    });
+
+    it('discards the result when the snippet was deleted while the request ran', async () => {
+        const { store, snippet } = installReadySnippet();
+        dispatch.mockImplementation(async (request) => {
+            store.layers[0].splice(0, 1);
+            return await completedRegeneration('<narrative>\nLate.\n</narrative>')(request);
+        });
+
+        await expect(
+            regenerateSnippetAt(0, 0, { gate, queue, dispatch, withRun: usageLedger.withRun }),
+        ).resolves.toEqual({ status: 'stale' });
+
+        expect(snippet.text).toBe('old summary');
+        expect(store.mutationEpoch).toBe(0);
+    });
+
+    it('discards the result when the user switched chats while the request ran', async () => {
+        const { snippet } = installReadySnippet();
+        const otherStore = makeSummaryStore();
+        dispatch.mockImplementation(async (request) => {
+            installSummaryContext({
+                chat: [makeMessage({ scId: 'elsewhere' })],
+                metadata: { summaryception: otherStore },
+            });
+            return await completedRegeneration('<narrative>\nLate.\n</narrative>')(request);
+        });
+
+        await expect(
+            regenerateSnippetAt(0, 0, { gate, queue, dispatch, withRun: usageLedger.withRun }),
+        ).resolves.toEqual({ status: 'stale' });
+
+        expect(snippet.text).toBe('old summary');
+        expect(otherStore.mutationEpoch).toBe(0);
     });
 
     it('returns aborted without mutating the store when the outcome is aborted', async () => {

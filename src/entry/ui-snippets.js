@@ -350,7 +350,7 @@ function startSnippetEdit(textEl, position, initialText) {
         finished = true;
         try {
             if (shouldSave) {
-                await commitSnippetEdit(textarea, position);
+                await commitSnippetEdit(textarea, position, initialText);
             }
         } finally {
             updateSnippetBrowser();
@@ -376,7 +376,7 @@ function startSnippetEdit(textEl, position, initialText) {
     textarea.focus().select();
 }
 
-async function commitSnippetEdit(textarea, position) {
+async function commitSnippetEdit(textarea, position, initialText) {
     const result = await updateSnippetTextAt(
         position.layerIdx,
         position.snippetIdx,
@@ -385,12 +385,18 @@ async function commitSnippetEdit(textarea, position) {
             gate: /** @type {import('../core/foreground-gate.js').ForegroundGate} */ (
                 foregroundGate
             ),
+            expectedText: initialText,
         },
     );
     if (result.status === 'updated') {
         toastr.success('Snippet updated', TOAST_TITLE, {
             timeOut: 1500,
         });
+    } else if (result.status === 'conflict') {
+        toastr.warning(
+            'This snippet changed while you were editing, so your edit was not saved.',
+            TOAST_TITLE,
+        );
     }
     // Stay silent for 'unchanged', 'missing', and 'empty': the re-render restores the true state, and an accidental Enter must not toast.
 }
@@ -438,6 +444,10 @@ async function onSnippetRedoClick() {
 async function onSnippetDeleteClick() {
     const position = getSnippetPosition($(this));
     if (!position) {
+        return;
+    }
+
+    if (!confirm(`Delete this Layer ${position.layerIdx} snippet? This cannot be undone.`)) {
         return;
     }
 
@@ -507,6 +517,11 @@ function handleRegenerationResult(result) {
         toastr.warning('Regeneration blocked - original snippet kept.', TOAST_TITLE);
     } else if (result.status === 'failed') {
         toastr.error('Regeneration failed - original snippet kept.', TOAST_TITLE);
+    } else if (result.status === 'stale') {
+        toastr.warning(
+            'Regeneration discarded - the chat or this snippet changed while it ran.',
+            TOAST_TITLE,
+        );
     } else if (result.status === 'busy') {
         showBusySummaryToast();
     } else if (result.status === 'unsupported') {

@@ -218,18 +218,19 @@ export function bindPromptFreezeRecoveryEvents({ gate }) {
 }
 
 /**
- * Freezes prompt mutations for host generations; dry runs and own requests are excluded.
+ * Freezes prompt mutations for host generations; dry runs are excluded.
+ * Summaryception's own requests go through generateRaw or a connection
+ * profile, and neither emits GENERATION_STARTED, so every non-dry-run start is
+ * a host generation. It must freeze even while a summarizer or auditor
+ * request is in flight, or a swipe sent then would skip the freeze and the
+ * Reroll Tail.
  * @param {unknown[]} args - GENERATION_STARTED event arguments.
- * @param {{ gate: import('../core/foreground-gate.js').ForegroundGate, queue: import('../core/summarizer-queue.js').SummarizerQueue }} deps
+ * @param {{ gate: import('../core/foreground-gate.js').ForegroundGate }} deps
  * @returns {void}
  */
-export function onGenerationStarted(args, { gate, queue }) {
+export function onGenerationStarted(args, { gate }) {
     if (isDryRunEvent(args[1], args[2])) {
         trace('Ignoring generation start from SillyTavern dry run.');
-        return;
-    }
-    if (queue.isRequestLive()) {
-        trace('Ignoring generation start from active Summaryception request.');
         return;
     }
     // A reroll replaces the last reply; its own checkpoint must leave the

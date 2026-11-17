@@ -19,7 +19,6 @@ let gate;
 /** The dispatch stand-in the auditor receives; returns the outcome the real request layer would. */
 const dispatch = vi.fn();
 /** Minimal Summarizer Queue stand-in; the generation-start hook only asks it for a live request. */
-const queue = { isRequestLive: () => false };
 
 beforeEach(() => {
     gate = makeForegroundGate().gate;
@@ -193,7 +192,7 @@ describe('continuity injection across reroll', () => {
             settings: { continuityEnabled: true },
         });
 
-        onGenerationStarted(['regenerate', {}, false], { gate, queue });
+        onGenerationStarted(['regenerate', {}, false], { gate });
 
         // The hook write must land inside the gate's pre-freeze window (the
         // write itself records the gate state); once the generation start
@@ -238,7 +237,7 @@ describe('continuity injection across reroll', () => {
             settings: { continuityEnabled: true },
         });
 
-        onGenerationStarted(['regenerate', {}, false], { gate, queue });
+        onGenerationStarted(['regenerate', {}, false], { gate });
 
         expect(chat[1].extra.summaryception_continuity).toBeDefined();
         expect(
@@ -263,12 +262,30 @@ describe('continuity injection across reroll', () => {
             settings: { continuityEnabled: true },
         });
 
-        onGenerationStarted(['swipe', {}, false], { gate, queue });
+        onGenerationStarted(['swipe', {}, false], { gate });
 
         expect(chat[3].extra.summaryception_continuity).toBeUndefined();
         expect(
             deriveContinuityCoverage(chat, { rerollTail: gate.isRerollTail() }).checkpointIndex,
         ).toBe(1);
+    });
+
+    it('freezes and drops the checkpoint on a swipe sent while a summarizer request is in flight', () => {
+        // Summaryception's own requests never emit GENERATION_STARTED, so a
+        // live background request must not hide the user's swipe from the gate.
+        const chat = rerollChat();
+        installSummaryContext({
+            chat,
+            metadata: { summaryception: makeSummaryStore() },
+            settings: { continuityEnabled: true },
+        });
+
+        const deps = { gate, queue: { isRequestLive: () => true } };
+        onGenerationStarted(['swipe', {}, false], deps);
+
+        expect(gate.isFrozen()).toBe(true);
+        expect(gate.isRerollTail()).toBe(true);
+        expect(chat[3].extra.summaryception_continuity).toBeUndefined();
     });
 
     it('keeps the checkpoint on generations that do not replace the last reply', () => {
@@ -279,7 +296,7 @@ describe('continuity injection across reroll', () => {
             settings: { continuityEnabled: true },
         });
 
-        onGenerationStarted(['normal', {}, false], { gate, queue });
+        onGenerationStarted(['normal', {}, false], { gate });
 
         expect(chat[3].extra.summaryception_continuity).toBeDefined();
         expect(

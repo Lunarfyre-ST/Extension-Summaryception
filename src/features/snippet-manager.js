@@ -1,16 +1,17 @@
-import { getChat } from '../foundation/context.js';
+import { getChat, getContext } from '../foundation/context.js';
 import { resolveScIdsToIndices } from '../foundation/message-identity.js';
 import { getChatStore } from '../foundation/chat-store.js';
 import { buildPassageFromRangeWithStats } from '../core/chatutils.js';
 import { buildPassageNameCensus } from '../core/refusal-guard.js';
 import { commitSnippetMutation } from '../core/snippet-commit.js';
 import { buildSnippetMetadataFromText } from '../core/snippet-metadata.js';
+import { fingerprintSourceRange, getChatIdentity } from '../core/summarizer-snapshot.js';
 
 /**
  * @typedef {{ status: 'ready', snippet: SummaryceptionSnippet, range: [number, number], context?: string }} RegenerationTarget
  * @typedef {{ status: 'missing' } | { status: 'unsupported' } | { status: 'busy' }} RegenerationUnavailable
- * @typedef {{ status: 'regenerated', range: [number, number] } | { status: 'empty-source' } | { status: 'unsupported' } | { status: 'failed' } | { status: 'aborted' } | { status: 'blocked' }} RegenerationRunResult
- * @typedef {{ status: 'regenerated', range: [number, number] } | { status: 'missing' | 'unsupported' | 'busy' | 'empty-source' | 'failed' | 'aborted' | 'blocked' }} RegenerateSnippetResult
+ * @typedef {{ status: 'regenerated', range: [number, number] } | { status: 'empty-source' } | { status: 'unsupported' } | { status: 'failed' } | { status: 'aborted' } | { status: 'blocked' } | { status: 'stale' }} RegenerationRunResult
+ * @typedef {{ status: 'regenerated', range: [number, number] } | { status: 'missing' | 'unsupported' | 'busy' | 'empty-source' | 'failed' | 'aborted' | 'blocked' | 'stale' }} RegenerateSnippetResult
  */
 
 /**
@@ -63,15 +64,72 @@ export function isRegenerationCandidate(layerIndex, snippetIndex, queue) {
 }
 
 /**
+ * @param {SummaryceptionStore} store
+ * @param {number} layerIndex
+ * @param {number} snippetIndex
+ * @param {string | undefined} expectedText
+ * @returns {SummaryceptionSnippet | null | 'conflict'}
+ */
+function findEditedSnippet(store, layerIndex, snippetIndex, expectedText) {
+    const snippet = getSnippetAt(store, layerIndex, snippetIndex);
+    if (expectedText === undefined || snippet?.text === expectedText) {
+        return snippet;
+    }
+    const matches = (store.layers[layerIndex] || []).filter(
+        (candidate) => candidate?.text === expectedText,
+    );
+    return matches.length === 1 ? matches[0] : 'conflict';
+}
+
+/**
+ * @param {ChatMessage[]} chat
+ * @param {[number, number]} range
+ * @returns {{ chatId: string, chatRef: ChatMessage[], fingerprint: string }}
+ */
+function captureRegenerationBasis(chat, range) {
+    return {
+        chatId: getChatIdentity(getContext()),
+        chatRef: chat,
+        fingerprint: fingerprintSourceRange(chat, range[0], range[1]),
+    };
+}
+
+/**
+ * @param {{ chatId: string, chatRef: ChatMessage[], fingerprint: string }} basis
+ * @param {RegenerationTarget} target
+ * @returns {boolean}
+ */
+function isRegenerationBasisCurrent(basis, target) {
+    const chat = getChat();
+    if (chat !== basis.chatRef || getChatIdentity(getContext()) !== basis.chatId) {
+        return false;
+    }
+    if (!(getChatStore().layers[0] || []).includes(target.snippet)) {
+        return false;
+    }
+    return fingerprintSourceRange(chat, target.range[0], target.range[1]) === basis.fingerprint;
+}
+
+/**
+ * An editor opened on a snippet can outlive its index: a background commit or
+ * promotion may shift the layer while the user types. `expectedText` is the
+ * text the editor opened with; the edit lands only on the snippet that still
+ * carries it, so it never overwrites a different snippet.
  * @param {number} layerIndex
  * @param {number} snippetIndex
  * @param {string} text
- * @param {{ gate: import('../core/foreground-gate.js').ForegroundGate }} options
- * @returns {Promise<{ status: 'updated' | 'missing' | 'empty' | 'unchanged' }>}
+ * @param {{ gate: import('../core/foreground-gate.js').ForegroundGate, expectedText?: string }} options
+ * @returns {Promise<{ status: 'updated' | 'missing' | 'empty' | 'unchanged' | 'conflict' }>}
  */
 export async function updateSnippetTextAt(layerIndex, snippetIndex, text, options) {
+    if (options.expectedText !== undefined && String(text).trim() === options.expectedText) {
+        return { status: 'unchanged' };
+    }
     const store = getChatStore();
-    const snippet = getSnippetAt(store, layerIndex, snippetIndex);
+    const snippet = findEditedSnippet(store, layerIndex, snippetIndex, options.expectedText);
+    if (snippet === 'conflict') {
+        return { status: 'conflict' };
+    }
     if (!snippet) {
         return { status: 'missing' };
     }
@@ -166,6 +224,7 @@ async function regenerateSnippetWithTarget(target, notify, gate, dispatch) {
     if (!passage.text.trim()) {
         return { status: 'empty-source' };
     }
+    const basis = captureRegenerationBasis(chat, target.range);
 
     const outcome = await dispatch({
         storyTxt: passage.text,
@@ -183,6 +242,11 @@ async function regenerateSnippetWithTarget(target, notify, gate, dispatch) {
         return { status: outcome.status };
     }
     const newSummary = outcome.text;
+    // The request can take a while: a chat switch, a Clear, a delete, or an
+    // edit of the source turns in the meantime makes the result stale.
+    if (!isRegenerationBasisCurrent(basis, target)) {
+        return { status: 'stale' };
+    }
 
     await commitSnippetMutation(
         getChatStore(),
